@@ -25,6 +25,11 @@
 #include <windows.h>
 #include "avisynth.h"
 
+// Fast integer rounding using IEEE 754 bit manipulation
+// This optimization technique is inspired by high-performance 
+// image processing libraries and was adopted from Aktanusa's approach
+#define DOUBLE_ROUND_MAGIC_NUMBER 6755399441055744.0
+
 typedef struct {
     int src_width;
     int src_height;
@@ -62,17 +67,20 @@ typedef struct {
     BYTE alpha;
 } rgb32_t;
 
-static bool ResizeHorizontalPlanar(BYTE* dstp, const BYTE* srcp, int src_pitch, params_t* params)
+// Fast rounding using bit trick
+inline BYTE FastRound(int value, int den)
+{
+    double pixelConvert = ((double)value / (double)den) + DOUBLE_ROUND_MAGIC_NUMBER;
+    return (BYTE)reinterpret_cast<int&>(pixelConvert);
+}
+
+static bool ResizeHorizontalPlanar(BYTE* dstp, const BYTE* srcp, int src_pitch, params_t* params, int* value_buffer)
 {
     int src_height = params->src_height;
     int target_width = params->target_width;
-    int target_height = params->target_height;
     int num = params->num_h;
     int den = params->den_h;
-    int* value = (int *)malloc(sizeof(int) * target_width);
-    if (!value) {
-        return false;
-    }
+    int* value = value_buffer;
 
     for (int y = 0, count_num = 0; y < src_height; y++) {
         int index_src = 0;
@@ -88,25 +96,21 @@ static bool ResizeHorizontalPlanar(BYTE* dstp, const BYTE* srcp, int src_pitch, 
         }
 
         for (int i = 0; i < target_width; i++) {
-            dstp[i] = (BYTE)(value[i] / den);
+            dstp[i] = FastRound(value[i], den);
         }
         srcp += src_pitch;
         dstp += target_width;
     }
-    free(value);
     return true;
 }
 
-static bool ResizeVerticalPlanar(BYTE* dstp, int dst_pitch, const BYTE* srcp, int src_pitch, params_t* params)
+static bool ResizeVerticalPlanar(BYTE* dstp, int dst_pitch, const BYTE* srcp, int src_pitch, params_t* params, int* value_buffer)
 {
     int src_width = params->target_width;
     int target_height = params->target_height;
     int num = params->num_v;
     int den = params->den_v;
-    int* value = (int *)malloc(sizeof(int) * target_height);
-    if (!value) {
-        return false;
-    }
+    int* value = value_buffer;
 
     for (int x = 0, count_num = 0; x < src_width; x++) {
         int index_src = 0;
@@ -121,26 +125,22 @@ static bool ResizeVerticalPlanar(BYTE* dstp, int dst_pitch, const BYTE* srcp, in
             }
         }
         for (int i = 0; i < target_height; i++) {
-            dstp[i * dst_pitch] = (BYTE)(value[i] / den);
+            dstp[i * dst_pitch] = FastRound(value[i], den);
         }
         srcp++;
         dstp++;
     }
-    free(value);
     return true;
 }
 
-static bool ResizeHorizontalRGB32(BYTE* dstp, const BYTE* srcp, int src_pitch, params_t* params)
+static bool ResizeHorizontalRGB32(BYTE* dstp, const BYTE* srcp, int src_pitch, params_t* params, int* value_buffer)
 {
     rgb32_t* buff = reinterpret_cast<rgb32_t*>(dstp);
     int src_height = params->src_height;
     int target_width = params->target_width;
     int num = params->num_h;
     int den = params->den_h;
-    i_rgb32_t* value = (i_rgb32_t*)malloc(sizeof(i_rgb32_t) * target_width);
-    if (!value) {
-        return false;
-    }
+    i_rgb32_t* value = (i_rgb32_t*)value_buffer;
 
     for (int y = 0, count_num = 0; y < src_height; y++) {
         int index_src = 0;
@@ -162,28 +162,24 @@ static bool ResizeHorizontalRGB32(BYTE* dstp, const BYTE* srcp, int src_pitch, p
             }
         }
         for (int i = 0; i < target_width; i++) {
-            buff[i].blue = (BYTE)(value[i].blue / den);
-            buff[i].green = (BYTE)(value[i].green / den);
-            buff[i].red = (BYTE)(value[i].red / den);
-            buff[i].alpha = (BYTE)(value[i].alpha / den);
+            buff[i].blue = FastRound(value[i].blue, den);
+            buff[i].green = FastRound(value[i].green, den);
+            buff[i].red = FastRound(value[i].red, den);
+            buff[i].alpha = FastRound(value[i].alpha, den);
         }
         srcp += src_pitch;
         buff += target_width;
     }
-    free(value);
     return true;
 }
 
-static bool ResizeVerticalRGB32(BYTE* dstp, int dst_pitch, const BYTE* srcp, int src_pitch, params_t* params)
+static bool ResizeVerticalRGB32(BYTE* dstp, int dst_pitch, const BYTE* srcp, int src_pitch, params_t* params, int* value_buffer)
 {
     int src_width = params->target_width;
     int const target_height = params->target_height;
     int num = params->num_v;
     int den = params->den_v;
-    i_rgb32_t* value = (i_rgb32_t *)malloc(sizeof(i_rgb32_t) * target_height);
-    if (!value) {
-        return false;
-    }
+    i_rgb32_t* value = (i_rgb32_t *)value_buffer;
 
     for (int x = 0, count_num = 0; x < src_width; x++) {
         int index_src_b = 0;
@@ -211,29 +207,25 @@ static bool ResizeVerticalRGB32(BYTE* dstp, int dst_pitch, const BYTE* srcp, int
         }
         for (int i = 0; i < target_height; i++) {
             int index = i * dst_pitch;
-            dstp[index++] = (BYTE)(value[i].blue / den);
-            dstp[index++] = (BYTE)(value[i].green / den);
-            dstp[index++] = (BYTE)(value[i].red / den);
-            dstp[index] = (BYTE)(value[i].alpha / den);
+            dstp[index++] = FastRound(value[i].blue, den);
+            dstp[index++] = FastRound(value[i].green, den);
+            dstp[index++] = FastRound(value[i].red, den);
+            dstp[index] = FastRound(value[i].alpha, den);
         }
         srcp += 4;
         dstp += 4;
     }
-    free(value);
     return true;
 }
 
-static bool ResizeHorizontalRGB24(BYTE* dstp, const BYTE* srcp, int src_pitch, params_t* params)
+static bool ResizeHorizontalRGB24(BYTE* dstp, const BYTE* srcp, int src_pitch, params_t* params, int* value_buffer)
 {
     rgb24_t* buff = reinterpret_cast<rgb24_t*>(dstp);
     int src_height = params->src_height;
     int target_width = params->target_width;
     int num = params->num_h;
     int den = params->den_h;
-    i_rgb24_t* value = (i_rgb24_t*)malloc(sizeof(i_rgb24_t) * target_width);
-    if (!value) {
-        return false;
-    }
+    i_rgb24_t* value = (i_rgb24_t*)value_buffer;
 
     for (int y = 0, count_num = 0; y < src_height; y++) {
         int index_src = 0;
@@ -253,27 +245,23 @@ static bool ResizeHorizontalRGB24(BYTE* dstp, const BYTE* srcp, int src_pitch, p
             }
         }
         for (int i = 0; i < target_width; i++) {
-            buff[i].blue = (BYTE)(value[i].blue / den);
-            buff[i].green = (BYTE)(value[i].green / den);
-            buff[i].red = (BYTE)(value[i].red / den);
+            buff[i].blue = FastRound(value[i].blue, den);
+            buff[i].green = FastRound(value[i].green, den);
+            buff[i].red = FastRound(value[i].red, den);
         }
         srcp += src_pitch;
         buff += target_width;
     }
-    free(value);
     return true;
 }
 
-static bool ResizeVerticalRGB24(BYTE* dstp, int dst_pitch, const BYTE* srcp, int src_pitch, params_t* params)
+static bool ResizeVerticalRGB24(BYTE* dstp, int dst_pitch, const BYTE* srcp, int src_pitch, params_t* params, int* value_buffer)
 {
     int src_width = params->target_width;
     int target_height = params->target_height;
     int num = params->num_v;
     int den = params->den_v;
-    i_rgb24_t* value = (i_rgb24_t *)malloc(sizeof(i_rgb24_t) * target_height);
-    if (!value) {
-        return false;
-    }
+    i_rgb24_t* value = (i_rgb24_t *)value_buffer;
 
     for (int x = 0, count_num = 0; x < src_width; x++) {
         int index_src_b = 0;
@@ -297,14 +285,13 @@ static bool ResizeVerticalRGB24(BYTE* dstp, int dst_pitch, const BYTE* srcp, int
         }
         for (int i = 0; i < target_height; i++) {
             int index = i * dst_pitch;
-            dstp[index++] = (BYTE)(value[i].blue / den);
-            dstp[index++] = (BYTE)(value[i].green / den);
-            dstp[index] = (BYTE)(value[i].red / den);
+            dstp[index++] = FastRound(value[i].blue, den);
+            dstp[index++] = FastRound(value[i].green, den);
+            dstp[index] = FastRound(value[i].red, den);
         }
         srcp += 3;
         dstp += 3;
     }
-    free(value);
     return true;
 }
 
@@ -320,9 +307,10 @@ class AreaResize : public GenericVideoFilter {
     params_t params[num_plane];
 
     BYTE* buff;
+    int* value_buffer;
 
-    bool (*ResizeHorizontal)(BYTE*, const BYTE*, int, params_t*);
-    bool (*ResizeVertical)(BYTE*, int, const BYTE*, int, params_t*);
+    bool (*ResizeHorizontal)(BYTE*, const BYTE*, int, params_t*, int*);
+    bool (*ResizeVertical)(BYTE*, int, const BYTE*, int, params_t*, int*);
 
 public:
     AreaResize(PClip _child, int target_width, int target_height, IScriptEnvironment* env);
@@ -333,6 +321,14 @@ public:
 AreaResize::AreaResize(PClip _child, int target_width, int target_height, IScriptEnvironment* env) : GenericVideoFilter(_child)
 {
     buff = NULL;
+    value_buffer = NULL;
+
+    int max_size = (target_width > target_height) ? target_width : target_height;
+    value_buffer = (int *)malloc(sizeof(i_rgb32_t) * max_size);
+    if (!value_buffer) {
+        env->ThrowError("AreaResize: out of memory");
+    }
+
     if (target_width != vi.width) {
         buff = (BYTE *)malloc(target_width * vi.height * (vi.IsRGB32() ? 4: vi.IsRGB24() ? 3 : 1));
         if (!buff) {
@@ -376,6 +372,9 @@ AreaResize::~AreaResize()
     if (buff) {
         free(buff);
     }
+    if (value_buffer) {
+        free(value_buffer);
+    }
 }
 
 PVideoFrame AreaResize::GetFrame(int n, IScriptEnvironment* env)
@@ -397,7 +396,7 @@ PVideoFrame AreaResize::GetFrame(int n, IScriptEnvironment* env)
         if (params[i].src_width == params[i].target_width) {
             resized_h = srcp;
         } else {
-            if (!ResizeHorizontal(buff, srcp, src_pitch, &params[i])) {
+            if (!ResizeHorizontal(buff, srcp, src_pitch, &params[i], value_buffer)) {
                 return dst;
             }
             resized_h = buff;
@@ -420,7 +419,7 @@ PVideoFrame AreaResize::GetFrame(int n, IScriptEnvironment* env)
             continue;
         }
 
-        if (!ResizeVertical(dstp, dst_pitch, resized_h, src_pitch, &params[i])) {
+        if (!ResizeVertical(dstp, dst_pitch, resized_h, src_pitch, &params[i], value_buffer)) {
             return dst;
         }
     }
@@ -461,5 +460,5 @@ AVSValue __cdecl CreateAreaResize(AVSValue args, void* user_data, IScriptEnviron
 extern "C" __declspec(dllexport) const char* __stdcall AvisynthPluginInit2(IScriptEnvironment* env)
 {
     env->AddFunction("AreaResize", "cii", CreateAreaResize, 0);
-    return "AreaResize for AviSynth 0.1.0 (Fixed)";
+    return "AreaResize for AviSynth 0.1.0 (Optimized)";
 }
