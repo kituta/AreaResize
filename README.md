@@ -2,7 +2,7 @@ Claude.aiを使用し、以下の変更を行いました。
 ・720x480 → 640x480 のように、高さ（または幅）が同値である場合に、正常に描画されない不具合の修正。  
 ・64bitに対応。  
   
-requirement  
+動作環境  
 AviSynthNEO  
 AviSynth+ (64bit環境推奨)  
 Microsoft Visual C++ 2015-2022 再頒布可能パッケージ  
