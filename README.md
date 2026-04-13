@@ -52,4 +52,4 @@ requirement
 
 sourcecode
 	https://github.com/chikuzen/AreaResize
-」
+  」
