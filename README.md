@@ -1,18 +1,17 @@
-Claude.aiを使用し、以下の変更を行いました。
-・720x480 → 640x480 のように、高さ（または幅）が同値である場合に、正常に描画されない不具合を修正しました。
-・64bitに対応しました。
-
-requirement
-AviSynthNEO
-AviSynth+ (64bit環境推奨)
-Microsoft Visual C++ 2015-2022 再頒布可能パッケージ
-
-
-Oka Motofumi（chikuzen）氏のAreaResizeを基にしています。この場を借りてお礼申し上げます。
-https://github.com/chikuzen/AreaResize
-
-以下は、オリジナルのAreaResizeのREADMEの引用です。
-「
+Claude.aiを使用し、以下の変更を行いました。  
+・720x480 → 640x480 のように、高さ（または幅）が同値である場合に、正常に描画されない不具合を修正しました。  
+・64bitに対応しました。  
+  
+requirement  
+AviSynthNEO  
+AviSynth+ (64bit環境推奨)  
+Microsoft Visual C++ 2015-2022 再頒布可能パッケージ  
+  
+Oka Motofumi（chikuzen）氏のAreaResizeを基にしています。この場を借りてお礼申し上げます。  
+https://github.com/chikuzen/AreaResize  
+  
+以下は、オリジナルのAreaResizeのREADMEの引用です。  
+「  
 AreaResize.dll version 0.1.0
 
 Copyright (C) 2012 Oka Motofumi(chikuzen.mo at gmail dot com)
