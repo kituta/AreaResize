@@ -12,7 +12,7 @@ https://github.com/chikuzen/AreaResize
   
 以下は、オリジナルのAreaResizeのREADMEの引用です。  
 
----
+<pre>
 AreaResize.dll version 0.1.0
 
 Copyright (C) 2012 Oka Motofumi(chikuzen.mo at gmail dot com)
@@ -54,5 +54,5 @@ requirement
 sourcecode
 	https://github.com/chikuzen/AreaResize
 
----
+</pre>
 引用終わり
